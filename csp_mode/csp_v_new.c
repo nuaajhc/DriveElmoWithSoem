@@ -43,9 +43,14 @@ struct TorqueIn {
     uint16 status_word;
 };
 
-/**
- * helper macros
- */
+target = (struct TorqueOut*)(ec_slave[1].outputs);
+val = (struct TorqueIn*)(ec_slave[1].inputs);
+
+target2 = (struct TorqueOut*)(ec_slave[2].outputs);
+val2 = (struct TorqueIn*)(ec_slave[2].inputs);
+
+/* helper macros*/
+
 #define READ(slaveId, idx, sub, buf, comment)    \
     {   \
         buf=0;  \
@@ -68,6 +73,34 @@ struct TorqueIn {
     printf("EC> \"%s\" %x - %x [%s] \n", (char*)ec_elist2string(), ec_slave[slaveId].state, ec_slave[slaveId].ALstatuscode, (char*)ec_ALstatuscode2string(ec_slave[slaveId].ALstatuscode));    \
 }
 
+void CheckSendFlag()
+{
+    int old_flag = SendFlag;
+    //printf("Flag: %d\n", old_flag);
+    while (1)
+    {   
+        //printf("Flag: %d\n", SendFlag);
+        if (SendFlag != old_flag){
+            break;
+        }
+    }
+}
+
+void* ecatprint(void* ptr)
+{
+    int slave;
+    while (1)
+    {
+        //printf("Main Outputs:  Target: 0x%x, control: 0x%x\n", target->torque, target->status);
+        //printf("Main Inputs:  Target: 0x%x, control: 0x%x\n", val->position, val->torque);
+        //printf("Flag: %d\n", SendFlag);
+        SendFlag = !SendFlag;
+        //printf("Flag: %d\n", SendFlag);
+        ec_send_processdata();
+        wkc = ec_receive_processdata(EC_TIMEOUTRET);
+        usleep(10000);
+    }
+}
 
 void simpletest(char* ifname)
 {
@@ -181,7 +214,7 @@ void simpletest(char* ifname)
             /* send one valid process data to make outputs in slaves happy*/
             ec_send_processdata();
             ec_receive_processdata(EC_TIMEOUTRET);
-
+            
             for (int i = 1; i <= ec_slavecount; i++) {
                 READ(i, 0x6083, 0, buf32, "Profile acceleration");
                 READ(i, 0x6084, 0, buf32, "Profile deceleration");
@@ -254,18 +287,11 @@ void simpletest(char* ifname)
                 }
                 int reachedInitial = 0;
                 int reachedInitial2 = 0;
-
+                
+                pthread_create(&thread2, NULL, &ecatprint, (void(*)) & ctime);
                 /* cyclic loop for two slaves*/
-                target = (struct TorqueOut*)(ec_slave[1].outputs);
-                val = (struct TorqueIn*)(ec_slave[1].inputs);
-
-                target2 = (struct TorqueOut*)(ec_slave[2].outputs);
-                val2 = (struct TorqueIn*)(ec_slave[2].inputs);
-
-                for (i = 1; i <= 4000; i++)
+                for (i = 1; i <= 500; i++)
                 {
-                    ec_send_processdata();
-                    wkc = ec_receive_processdata(EC_TIMEOUTRET);
 
                     if (wkc >= expectedWKC) {
                         printf("Processdata cycle %4d, WKC %d,", i, wkc);
@@ -319,11 +345,11 @@ void simpletest(char* ifname)
                         }
 
                         if ((val->status_word & 0x0fff) == 0x0237 && reachedInitial) {
-                            target->target_position = (int32)(sin(i / 1000.) * (100000));
+                            target->target_position = (int32)(sin(i / 100.) * (50000));
                         }
 
                         if ((val2->status_word & 0x0fff) == 0x0237 && reachedInitial2) {
-                            target2->target_position = (int32)(sin(i / 1000.) * (100000));
+                            target2->target_position = (int32)(sin(i / 100.) * (50000));
                         }
 
                         printf("  Target: 0x%x, control: 0x%x", target->target_position, target->control_word);
@@ -331,10 +357,12 @@ void simpletest(char* ifname)
                         printf("\r");
                         needlf = TRUE;
                     }
-                    usleep(timestep);
+                    //usleep(timestep);
                 }
                 inOP = FALSE;
             }
+            
+            
             else
             {
                 printf("Not all slaves reached operational state.\n");
