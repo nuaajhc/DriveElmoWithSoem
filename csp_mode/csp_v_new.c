@@ -343,6 +343,8 @@ void simpletest(char* ifname)
                         if (reachedInitial2 == 0  && (val2->status_word & 0x0fff) == 0x0237) {
                             reachedInitial2 = 1;
                         }
+                        
+                        CheckSendFlag();
 
                         if ((val->status_word & 0x0fff) == 0x0237 && reachedInitial) {
                             target->target_position = (int32)(sin(i / 100.) * (50000));
