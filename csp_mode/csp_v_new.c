@@ -23,6 +23,7 @@
 
 char IOmap[4096];
 pthread_t thread1;
+pthread_t thread2;
 int expectedWKC;
 boolean needlf;
 volatile int wkc;
